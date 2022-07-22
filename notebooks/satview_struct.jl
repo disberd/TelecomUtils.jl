@@ -590,14 +590,60 @@ function get_nadir_beam_diameter(sv, scan_3db)
 	get_distance_on_earth(sv, p1, p2)
 end
 
-# ╔═╡ b9dacaaf-b55c-46c8-8fd0-ad520505ecbb
-export SatView, change_position!, get_range, get_era, get_pointing, get_lla, get_ecef, get_distance_on_earth, get_nadir_beam_diameter
-
 # ╔═╡ 4af7a092-8f42-4aef-9c09-feab8ebc1d87
 # ╠═╡ skip_as_script = true
 #=╠═╡
 get_nadir_beam_diameter(SatView(LLA(50°,0°,735km), EarthModel()), 55)
   ╠═╡ =#
+
+# ╔═╡ 22a1312d-c7f4-486f-a62c-3389f7715bae
+md"""
+## Get Angle Between Satellites
+"""
+
+# ╔═╡ 28938135-9c93-4992-bfec-f106d8aa0bf6
+function get_angle2Sat(sv1::SatView, sv2::SatView, ::ExtraOutput)  
+	# Find the angle between 2 satellites (same or different shell) from the nadir/zenith of sv1 to sv2 and viceversa. If the LoS between the two satellites is obstructed by Earth return NaN.
+
+	# Find the difference vector between the satellites (vector "connecting" sv1 and sv2)
+ 	pdiff = (sv1.ecef - sv2.ecef) 
+ 	 
+ 	# Find the magnitude of the difference to compare with the intersection solutions 
+ 	t = norm(pdiff) 
+ 	 
+ 	# Find the intersection points with the ellipsoid 
+ 	t₁,t₂ = _intersection_solutions(pdiff./t, sv1.ecef, sv1.earthmodel.ellipsoid.a, sv1.earthmodel.ellipsoid.b) 
+ 	 
+ 	# If both t₁ and t₂ are NaN, it means that no intersection with the ellipsoid is found and so there is no earth blockage 
+ 	# If t <= t₁ also no blockage is present 
+ 	# If t > t₁ then the earth is blocking the view point so we return NaN 
+ 	 
+ 	# The 1e-3 is there because the computed distance might have some error that is usually way below one mm, and 1mm shouldn't change anything for our required precision 
+	# Return NaN if the Earth is blocking the LoS between 2 satellites
+ 	!isnan(t₁) && abs(t) > abs(t₁)+1e-3 && return NaN, NaN, NaN 
+ 	 
+ 	# Find the coordinates in the West-North-Down CRS (centered in sv1)
+ 	wnd = sv1.R * pdiff 
+
+	# Convert in spherical coordinates
+	x,y,z = wnd
+ 	r = hypot(x, y, z) 
+ 	θ = r == 0 ? 0 : acos(z/r) # 0: nadir
+	# //TODO: check consistency with the rest of the cde for angle conventions (remove -x)
+ 	ϕ = r == 0 ? 0 : atan(y,x) # angle measured from West to North clockwise wrt the local reference 
+ 	 
+ 	# Return coordinates 
+	# //TODO: check unit for consistency
+ 	# return θ * rad, ϕ * rad, r * m
+ 	return θ, ϕ, r
+ end
+
+# ╔═╡ 56d88bb9-3b33-4b1a-88ae-d90af4de2bd1
+# Call returning only angle from sv1 to sv2
+get_angle2Sat(sv1::SatView, sv2::SatView) = get_angle2Sat(sv1,sv2,ExtraOutput())[1]
+
+# ╔═╡ b9dacaaf-b55c-46c8-8fd0-ad520505ecbb
+export SatView, change_position!, get_range, get_era, get_pointing, get_lla, get_ecef, get_distance_on_earth, get_nadir_beam_diameter, get_angle2Sat
 
 # ╔═╡ c02d0705-6647-4a44-8ae8-fc256f18c4ce
 # ╠═╡ skip_as_script = true
@@ -1349,9 +1395,12 @@ uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
 # ╠═30d32b7a-c95c-4d80-a60a-a87b27b3bf3c
 # ╠═407101b2-c794-49b0-9f8b-07fb45b80ca9
 # ╠═af71267d-b5ee-46b7-bf8d-d740033d35e0
-# ╠═2612961b-0e1e-4615-8959-74ab3bc919f9
+# ╟─2612961b-0e1e-4615-8959-74ab3bc919f9
 # ╠═30959832-9eb2-48c5-83d5-776d336c9aa7
 # ╠═4af7a092-8f42-4aef-9c09-feab8ebc1d87
+# ╟─22a1312d-c7f4-486f-a62c-3389f7715bae
+# ╠═28938135-9c93-4992-bfec-f106d8aa0bf6
+# ╠═56d88bb9-3b33-4b1a-88ae-d90af4de2bd1
 # ╠═c02d0705-6647-4a44-8ae8-fc256f18c4ce
 # ╠═d15726ab-5a28-4a24-b5ed-b3c8ecb6c581
 # ╠═ae686da9-45d5-4fc2-9cbd-2d828d792407
